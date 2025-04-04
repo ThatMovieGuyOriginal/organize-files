@@ -4,15 +4,39 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from PyQt6.QtCore import QDir, QSize, Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QAction, QFont, QIcon
-from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog,
-                             QFileSystemModel, QGroupBox, QHBoxLayout,
-                             QHeaderView, QLabel, QLineEdit, QMainWindow,
-                             QMenu, QMessageBox, QProgressBar, QPushButton,
-                             QSpinBox, QSystemTrayIcon, QTableWidget,
-                             QTableWidgetItem, QTabWidget, QTreeView,
-                             QVBoxLayout, QWidget)
+from PySide6.QtCore import QDir, QSize, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QAction, QFont, QIcon
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QFileSystemModel,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSpinBox,
+    QSystemTrayIcon,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTreeView,
+    QVBoxLayout,
+    QWidget,
+)
+
+# Import organize modules with fallback
+try:
+    from organize.indexer import file_index
+except ImportError:
+    from custom_indexer import file_index
 
 # Import organize modules
 from organize import Config, Rule
@@ -25,6 +49,7 @@ from .config_manager import ConfigManager
 from .rule_editor import RuleEditorDialog
 from .settings import Settings
 from .utils import format_size, format_time, get_resource_path
+
 # Local imports
 from .worker import IndexWorker, OrganizeWorker, WatchWorker
 
