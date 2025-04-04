@@ -1,0 +1,12 @@
+# organize_gui/resources/icons/app_icon.svg
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect width="128" height="128" fill="#4a86e8" rx="16" ry="16"/>
+  <g fill="#ffffff">
+    <rect x="24" y="24" width="32" height="32" rx="4" ry="4"/>
+    <rect x="72" y="24" width="32" height="32" rx="4" ry="4"/>
+    <rect x="24" y="72" width="32" height="32" rx="4" ry="4"/>
+    <rect x="72" y="72" width="32" height="32" rx="4" ry="4"/>
+    <path d="M40 28 L28 40 M40 52 L28 64 M88 28 L76 40 M88 52 L76 64 M40 76 L28 88 M40 100 L28 112 M88 76 L76 88 M88 100 L76 112" stroke="#ffffff" stroke-width="4"/>
+  </g>
+</svg>

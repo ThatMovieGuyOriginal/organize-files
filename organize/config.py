@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import textwrap
 from pathlib import Path
-from typing import Iterable, List, Optional, Union
+from typing import Iterable, List, Optional, Set, Union
 
 import yaml
 from pydantic import ConfigDict, ValidationError
@@ -11,7 +11,7 @@ from pydantic.dataclasses import dataclass
 
 from .errors import ConfigError
 from .output import Default, Output
-from .rule import Rule
+from .resource import Resource
 from .template import render
 from .utils import ReportSummary, normalize_unicode
 
@@ -108,5 +108,100 @@ class Config:
                         rule_nr=rule_nr,
                     )
                     summary += rule_summary
+        finally:
+            output.end(summary.success, summary.errors)
+    
+    def execute_for_path(
+        self,
+        path: Path,
+        simulate: bool = True,
+        output: Output = Default(),
+        tags: Tags = set(),
+        skip_tags: Tags = set(),
+    ) -> None:
+        """
+        Execute rules for a specific path.
+        
+        Args:
+            path: Path to execute rules for
+            simulate: Whether to simulate execution
+            output: Output handler
+            tags: Tags to run
+            skip_tags: Tags to skip
+        """
+        path = path.resolve()
+        output.start(
+            simulate=simulate,
+            config_path=self._config_path,
+            working_dir=Path("."),
+        )
+        summary = ReportSummary()
+        
+        try:
+            # Create a direct resource from the path
+            resource = Resource(path=path)
+            
+            # Find all rules that should process this resource
+            for rule_nr, rule in enumerate(self.rules):
+                if not rule.enabled:
+                    continue
+                    
+                if not should_execute(
+                    rule_tags=rule.tags,
+                    tags=tags,
+                    skip_tags=skip_tags,
+                ):
+                    continue
+                
+                # Skip rules that don't target this resource type
+                if rule.targets == "files" and not resource.is_file():
+                    continue
+                if rule.targets == "dirs" and not resource.is_dir():
+                    continue
+                
+                # Skip rules with locations that don't match this path
+                if rule.locations:
+                    location_matches = False
+                    for location in rule.locations:
+                        for loc_path in location.path:
+                            expanded_path = Path(render(loc_path))
+                            try:
+                                relative = path.relative_to(expanded_path)
+                                if relative:
+                                    resource.basedir = expanded_path
+                                    location_matches = True
+                                    break
+                            except ValueError:
+                                pass
+                        if location_matches:
+                            break
+                            
+                    if not location_matches:
+                        continue
+                
+                # Execute the rule with this resource
+                res_copy = Resource(
+                    path=resource.path,
+                    basedir=resource.basedir,
+                    rule=rule,
+                    rule_nr=rule_nr,
+                )
+                
+                try:
+                    rule_summary = rule.execute_for_resource(
+                        resource=res_copy,
+                        simulate=simulate,
+                        output=output,
+                    )
+                    summary += rule_summary
+                except Exception as e:
+                    output.msg(
+                        res=res_copy,
+                        msg=str(e),
+                        level="error",
+                        sender="execute_for_path",
+                    )
+                    summary.errors += 1
+                    
         finally:
             output.end(summary.success, summary.errors)

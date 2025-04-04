@@ -78,6 +78,7 @@ class Walker:
     filter_files: Optional[List[str]] = None
     exclude_dirs: Set[str] = Field(default_factory=set)
     exclude_files: Set[str] = Field(default_factory=set)
+    use_index: bool = False
 
     def _should_yield_file(self, entry: os.DirEntry, lvl: int) -> bool:
         return (
@@ -111,6 +112,30 @@ class Walker:
         if not files and not dirs:
             return
 
+        # If using the index, check if it's available first
+        if self.use_index:
+            try:
+                from organize.indexer import file_index
+
+                # For directories, we can use the index directly
+                if dirs and not files:
+                    for file_info in file_index.get_files_by_tag("is_dir", "True"):
+                        path = Path(file_info.path)
+                        if self._should_yield_indexed_dir(path, top, lvl):
+                            yield path
+                    return
+                    
+                # For files, we can use the index too
+                if files and not dirs:
+                    for file_info in file_index.get_files_by_tag("is_dir", "False"):
+                        path = Path(file_info.path)
+                        if self._should_yield_indexed_file(path, top, lvl):
+                            yield path
+                    return
+            except (ImportError, AttributeError):
+                # Index not available, fall back to regular walking
+                pass
+
         # list all dirs and nondirs of the folder
         result = scandir(top, collectfiles=files)
 
@@ -139,6 +164,54 @@ class Walker:
                 yield from dir_actions.to_yield
         else:
             raise ValueError(f'Unknown method "{self.method}"')
+            
+    def _should_yield_indexed_file(self, path: Path, top: str, lvl: int) -> bool:
+        """Check if an indexed file should be yielded."""
+        # Check if the file is in the correct base directory
+        try:
+            rel_path = path.relative_to(top)
+        except ValueError:
+            return False
+            
+        # Check depth
+        depth = len(rel_path.parts) - 1
+        if depth < self.min_depth:
+            return False
+        if self.max_depth is not None and depth > self.max_depth:
+            return False
+            
+        # Check exclusions and filters
+        if pattern_match(path.name, self.exclude_files):
+            return False
+            
+        if self.filter_files is not None and not pattern_match(path.name, self.filter_files):
+            return False
+            
+        return True
+        
+    def _should_yield_indexed_dir(self, path: Path, top: str, lvl: int) -> bool:
+        """Check if an indexed directory should be yielded."""
+        # Check if the directory is in the correct base directory
+        try:
+            rel_path = path.relative_to(top)
+        except ValueError:
+            return False
+            
+        # Check depth
+        depth = len(rel_path.parts) - 1
+        if depth < self.min_depth:
+            return False
+        if self.max_depth is not None and depth > self.max_depth:
+            return False
+            
+        # Check exclusions and filters
+        if pattern_match(path.name, self.exclude_dirs):
+            return False
+            
+        if self.filter_dirs is not None and not pattern_match(path.name, self.filter_dirs):
+            return False
+            
+        return True
 
     def files(self, path: str) -> Iterator[Path]:
         # if path is a single file we emit just the path itself
@@ -147,8 +220,14 @@ class Walker:
             return
         # otherwise we walk the given folder
         for entry in self.walk(path, files=True, dirs=False):
-            yield Path(entry.path)
+            if isinstance(entry, Path):
+                yield entry
+            else:
+                yield Path(entry.path)
 
     def dirs(self, path: str) -> Iterator[Path]:
         for entry in self.walk(path, files=False, dirs=True):
-            yield Path(entry.path)
+            if isinstance(entry, Path):
+                yield entry
+            else:
+                yield Path(entry.path)

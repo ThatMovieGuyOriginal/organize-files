@@ -1,7 +1,8 @@
 from pathlib import Path
 from typing import Dict, Iterable, List, Literal, Optional, Set
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (BaseModel, ConfigDict, Field, field_validator,
+                      model_validator)
 
 from organize.logger import logger
 
@@ -279,30 +280,76 @@ class Rule(BaseModel):
         for res in self.walk(rule_nr=rule_nr):
             if res.path in skip_pathes:
                 continue
+            
+            rule_summary = self.execute_for_resource(
+                resource=res,
+                simulate=simulate,
+                output=output,
+            )
+            summary += rule_summary
+            skip_pathes = skip_pathes.union(res.walker_skip_pathes)
+            
+        return summary
+    
+    def execute_for_resource(
+        self, 
+        resource: Resource,
+        simulate: bool,
+        output: Output,
+    ) -> ReportSummary:
+        """
+        Execute this rule for a specific resource.
+        
+        Args:
+            resource: Resource to execute the rule for
+            simulate: Whether to simulate execution
+            output: Output handler
+            
+        Returns:
+            Summary of the execution
+        """
+        summary = ReportSummary()
+        
+        if not self.enabled:
+            return summary
+            
+        try:
+            # Apply filters
             result = filter_pipeline(
                 filters=self.filters,
                 filter_mode=self.filter_mode,
-                res=res,
+                res=resource,
                 output=output,
             )
+            
             if result:
                 try:
+                    # Apply actions
                     for action in action_pipeline(
                         actions=self.actions,
-                        res=res,
+                        res=resource,
                         simulate=simulate,
                         output=output,
                     ):
                         pass
-                    skip_pathes = skip_pathes.union(res.walker_skip_pathes)
                     summary.success += 1
                 except Exception as e:
                     output.msg(
-                        res=res,
+                        res=resource,
                         msg=str(e),
                         level="error",
                         sender=action,
                     )
                     logger.exception(e)
                     summary.errors += 1
+        except Exception as e:
+            output.msg(
+                res=resource,
+                msg=f"Error during filter processing: {e}",
+                level="error",
+                sender=self,
+            )
+            logger.exception(e)
+            summary.errors += 1
+            
         return summary
